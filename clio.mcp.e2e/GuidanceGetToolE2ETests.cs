@@ -499,6 +499,64 @@ public sealed class GuidanceGetToolE2ETests {
 			because: "the analytics-widgets pointer must route to the indicator-widget guide by name rather than copying its content");
 	}
 
+	[Test]
+	[AllureTag(GuidanceGetTool.ToolName)]
+	[AllureName("get-guidance returns the ui-guidelines index that routes to its leaf guides by name")]
+	[Description("Verifies get-guidance returns the reintroduced ui-guidelines index over the real stdio MCP path and that it routes to ui-page-layout / ui-accessibility / ui-review-checklists by name (ENG-91403).")]
+	public async Task GuidanceGet_Should_Return_Ui_Guidelines_Guide() {
+		// Arrange
+		McpE2ESettings settings = TestConfiguration.Load();
+		settings.ClioProcessPath = TestConfiguration.ResolveFreshClioProcessPath();
+		await using ArrangeContext context = await ArrangeAsync(settings, TimeSpan.FromMinutes(3));
+
+		// Act
+		GuidanceGetResponse response = await CallAsync(
+			context.Session,
+			context.CancellationTokenSource.Token,
+			new Dictionary<string, object?> { ["name"] = "ui-guidelines" });
+
+		// Assert
+		response.Success.Should().BeTrue(
+			because: "ui-guidelines is a registered guidance name after ENG-91403");
+		response.Article.Should().NotBeNull(
+			because: "successful guidance lookups should return the resolved article payload");
+		response.Article!.Uri.Should().Be("docs://mcp/guides/ui-guidelines",
+			because: "the canonical resource URI for the ui-guidelines index should be stable");
+		response.Article.Text.Should().Contain("name=ui-page-layout",
+			because: "the ui-guidelines index must route to the layout leaf by name rather than copying its content");
+		response.Article.Text.Should().Contain("name=ui-accessibility",
+			because: "the ui-guidelines index must route to the accessibility leaf by name rather than copying its content");
+		response.Article.Text.Should().Contain("name=ui-review-checklists",
+			because: "the ui-guidelines index must route to the review-checklists leaf by name rather than copying its content");
+	}
+
+	[Test]
+	[AllureTag(GuidanceGetTool.ToolName)]
+	[AllureName("get-guidance returns the ui-page-layout leaf with the concept-to-component map")]
+	[Description("Verifies get-guidance returns the ui-page-layout leaf over the real stdio MCP path, carrying the concept-to-component map (ENG-91403).")]
+	public async Task GuidanceGet_Should_Return_Ui_Page_Layout_Guide() {
+		// Arrange
+		McpE2ESettings settings = TestConfiguration.Load();
+		settings.ClioProcessPath = TestConfiguration.ResolveFreshClioProcessPath();
+		await using ArrangeContext context = await ArrangeAsync(settings, TimeSpan.FromMinutes(3));
+
+		// Act
+		GuidanceGetResponse response = await CallAsync(
+			context.Session,
+			context.CancellationTokenSource.Token,
+			new Dictionary<string, object?> { ["name"] = "ui-page-layout" });
+
+		// Assert
+		response.Success.Should().BeTrue(
+			because: "ui-page-layout is a registered guidance name after ENG-91403");
+		response.Article.Should().NotBeNull(
+			because: "successful guidance lookups should return the resolved article payload");
+		response.Article!.Uri.Should().Be("docs://mcp/guides/ui-page-layout",
+			because: "the canonical resource URI for the ui-page-layout leaf should be stable");
+		response.Article.Text.Should().Contain("Concept -> Freedom UI component map",
+			because: "the ui-page-layout leaf must carry the concept-to-component map agents rely on");
+	}
+
 	private static async Task<ArrangeContext> ArrangeAsync(McpE2ESettings settings, TimeSpan timeout) {
 		CancellationTokenSource cancellationTokenSource = new(timeout);
 		McpServerSession session = await McpServerSession.StartAsync(settings, cancellationTokenSource.Token);

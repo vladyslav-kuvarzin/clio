@@ -28,7 +28,9 @@ public sealed class McpGuidanceForcingTests {
 	private static readonly string[] NewCreatioGuides = ["analytics-widgets"];
 
 	// Guides rolled back at business request (must NOT be registered or routed).
-	private static readonly string[] RolledBackGuides = ["ui-guidelines", "schema-naming"];
+	// Note: ui-guidelines was reintroduced under ENG-91403 (sourced from the creatio-ui-guidelines skill);
+	// only schema-naming remains rolled back.
+	private static readonly string[] RolledBackGuides = ["schema-naming"];
 
 	// Guide names referenced by the router routing table and/or the touched tool descriptions.
 	// Drift guard: every one must resolve in GuidanceCatalog.
@@ -293,5 +295,86 @@ public sealed class McpGuidanceForcingTests {
 			because: "create-page emits note: 'compile-creatio not required' on success");
 		typeof(CommandExecutionResult).GetProperty("Note").Should().NotBeNull(
 			because: "update-entity-schema emits note: 'compile-creatio not required' on success");
+	}
+
+	// ---- ENG-91403: reintroduced ui-guidelines index + leaves ----
+
+	private static readonly string[] UiGuidelinesGuides = [
+		"ui-guidelines", "ui-page-layout", "ui-accessibility", "ui-review-checklists"
+	];
+
+	[Test]
+	[Category("Unit")]
+	[Description("Registers the reintroduced ui-guidelines index and its three leaf guides in GuidanceCatalog (ENG-91403 reverses the earlier rollback).")]
+	public void GuidanceCatalog_ShouldRegisterUiGuidelinesIndexAndLeaves_WhenQueried() {
+		// Act
+		IReadOnlyList<string> names = GuidanceCatalog.GetNames();
+
+		// Assert
+		names.Should().Contain(UiGuidelinesGuides,
+			because: "ENG-91403 reintroduces ui-guidelines as a real index guide with its layout, accessibility, and review leaves");
+	}
+
+	[Test]
+	[Category("Unit")]
+	[Description("Returns a non-empty article with the canonical docs:// URI for the ui-guidelines index and each of its leaves via get-guidance.")]
+	public async Task GuidanceGet_ShouldReturnArticle_ForEachUiGuidelinesGuide() {
+		// Arrange
+		GuidanceGetTool tool = new();
+
+		foreach (string name in UiGuidelinesGuides) {
+			// Act
+			GuidanceGetResponse result = await tool.GetGuidance(new GuidanceGetArgs(name));
+
+			// Assert
+			result.Success.Should().BeTrue(
+				because: $"{name} is a registered guidance name after ENG-91403");
+			result.Article.Should().NotBeNull(
+				because: $"a successful {name} lookup must return the resolved article");
+			result.Article!.Uri.Should().Be($"docs://mcp/guides/{name}",
+				because: $"the {name} guide must expose its canonical docs:// URI");
+			result.Article.Text.Should().NotBeNullOrWhiteSpace(
+				because: $"the {name} guide must carry article content");
+		}
+	}
+
+	[Test]
+	[Category("Unit")]
+	[Description("Confirms the ui-guidelines index is a thin router that references its three leaves by name instead of duplicating their content.")]
+	public async Task UiGuidelinesIndex_ShouldRouteToItsLeavesByName_WhenInspected() {
+		// Arrange
+		GuidanceGetTool tool = new();
+
+		// Act
+		GuidanceGetResponse result = await tool.GetGuidance(new GuidanceGetArgs("ui-guidelines"));
+		string article = result.Article!.Text;
+
+		// Assert
+		article.Should().Contain("Routing",
+			because: "ui-guidelines is a thin index whose Routing section must route to its leaves");
+		article.Should().Contain("name=ui-page-layout",
+			because: "the layout/controls detail lives in the ui-page-layout leaf and must be referenced by name, not copied");
+		article.Should().Contain("name=ui-accessibility",
+			because: "the WCAG/contrast detail lives in the ui-accessibility leaf and must be referenced by name, not copied");
+		article.Should().Contain("name=ui-review-checklists",
+			because: "the audit templates live in the ui-review-checklists leaf and must be referenced by name, not copied");
+	}
+
+	[Test]
+	[Category("Unit")]
+	[Description("The page-modification GATE is the single routing surface that dispatches UI design/review work to the ui-guidelines index; the leaf names do not fan out into the gate.")]
+	public async Task PageModificationGate_ShouldRouteDesignWorkToUiGuidelines_WhenInspected() {
+		// Arrange
+		GuidanceGetTool tool = new();
+
+		// Act
+		GuidanceGetResponse pageMod = await tool.GetGuidance(new GuidanceGetArgs("page-modification"));
+		string article = pageMod.Article!.Text;
+
+		// Assert
+		article.Should().Contain("ui-guidelines",
+			because: "the page-modification GATE must dispatch page design/review work to the ui-guidelines index");
+		article.Should().NotContain("ui-page-layout",
+			because: "leaf guide names must live in exactly one routing surface (the ui-guidelines index), not also in the page-modification gate");
 	}
 }
